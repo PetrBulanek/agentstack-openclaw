@@ -7,11 +7,13 @@ RUN apt-get update && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Install OpenClaw globally
-RUN npm install -g openclaw@latest
+# Install OpenClaw globally. Override OPENCLAW_VERSION at build time to pin a different release.
+ARG OPENCLAW_VERSION=latest
+RUN npm install -g "openclaw@${OPENCLAW_VERSION}"
 
-# Install uv
-RUN pip install uv
+# Install uv via Astral's official installer
+ENV PATH="/root/.local/bin:${PATH}"
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Pre-configure OpenClaw home directory
 RUN mkdir -p /root/.openclaw

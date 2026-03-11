@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+from typing import Any
 
 from agentstack_sdk.a2a.types import AgentMessage, Message
 from agentstack_sdk.server import Server
@@ -12,6 +13,13 @@ from agentstack_sdk.server import Server
 logger = logging.getLogger(__name__)
 
 server = Server()
+DEFAULT_TIMEOUT_SECONDS = float(os.getenv("OPENCLAW_AGENT_TIMEOUT", "90"))
+
+
+def _extract_text_response(result: dict[str, Any]) -> str:
+    payloads = result.get("result", {}).get("payloads", [])
+    texts = [payload.get("text", "") for payload in payloads if payload.get("text")]
+    return "\n".join(texts) if texts else "No response from OpenClaw."
 
 
 async def _run_openclaw_agent(message: str, session_id: str = "default") -> str:
@@ -27,16 +35,28 @@ async def _run_openclaw_agent(message: str, session_id: str = "default") -> str:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
+
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=DEFAULT_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()
+        raise RuntimeError(f"OpenClaw agent timed out after {DEFAULT_TIMEOUT_SECONDS:g}s")
 
     if proc.returncode != 0:
         error_msg = stderr.decode().strip()
         raise RuntimeError(f"OpenClaw agent failed (exit {proc.returncode}): {error_msg}")
 
-    result = json.loads(stdout.decode())
-    payloads = result.get("result", {}).get("payloads", [])
-    texts = [p.get("text", "") for p in payloads if p.get("text")]
-    return "\n".join(texts) if texts else "No response from OpenClaw."
+    raw_output = stdout.decode().strip()
+    if not raw_output:
+        raise RuntimeError("OpenClaw agent returned an empty response")
+
+    try:
+        result = json.loads(raw_output)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"OpenClaw agent returned invalid JSON: {raw_output}") from exc
+
+    return _extract_text_response(result)
 
 
 @server.agent(

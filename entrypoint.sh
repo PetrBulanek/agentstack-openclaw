@@ -27,17 +27,12 @@ openclaw gateway --port 18789 &
 
 # Wait for the gateway to become healthy
 echo "Waiting for OpenClaw gateway..."
-for i in $(seq 1 60); do
-    if curl -sf http://127.0.0.1:18789/healthz > /dev/null 2>&1; then
-        echo "OpenClaw gateway is ready."
-        break
-    fi
-    if [ "$i" -eq 60 ]; then
-        echo "ERROR: OpenClaw gateway did not start within 60s."
-        exit 1
-    fi
-    sleep 1
-done
+if ! curl --retry 60 --retry-delay 1 --retry-connrefused -sf \
+    http://127.0.0.1:18789/healthz > /dev/null; then
+    echo "ERROR: OpenClaw gateway did not start within 60s."
+    exit 1
+fi
+echo "OpenClaw gateway is ready."
 
 # Start the Python agent directly from the venv
 exec /app/.venv/bin/agent

@@ -1,10 +1,14 @@
 services:
   openclaw-agent:
-    build: .
+    build:
+      context: .
+      args:
+        OPENCLAW_VERSION: ${OPENCLAW_VERSION:-latest}
     ports:
       - "${PORT:-8000}:8000"
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY in .env or environment}
+      OPENCLAW_MODEL: ${OPENCLAW_MODEL:-openrouter/arcee-ai/trinity-large-preview:free}
+      OPENCLAW_AGENT_TIMEOUT: ${OPENCLAW_AGENT_TIMEOUT:-90}
       PORT: "8000"
       HOST: "0.0.0.0"
-      # Set OPENCLAW_MODEL in .env to override (e.g. openrouter/arcee-ai/trinity-large-preview:free)
