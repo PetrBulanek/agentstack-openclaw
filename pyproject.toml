@@ -1,0 +1,26 @@
+[project]
+name = "openclaw-agent"
+version = "0.1.0"
+description = "Experimental PoC: OpenClaw AI assistant as an Agent Stack unmanaged agent"
+authors = [
+    { name = "Petr Bulanek" },
+]
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "agentstack-sdk>=0.6.2",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[project.scripts]
+agent = "openclaw_agent.agent:run"
+
+[build-system]
+requires = ["uv_build>=0.10.0,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
