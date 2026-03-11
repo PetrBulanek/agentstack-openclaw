@@ -5,9 +5,10 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any
+from typing import Annotated, Any, AsyncGenerator
 
-from agentstack_sdk.a2a.types import AgentMessage, Message
+from agentstack_sdk.a2a.types import AgentMessage, Message, RunYield
+from agentstack_sdk.a2a.extensions import TrajectoryExtensionServer, TrajectoryExtensionSpec
 from agentstack_sdk.server import Server
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,10 @@ async def _run_openclaw_agent(message: str, session_id: str = "default") -> str:
     name="OpenClaw",
     description="An experimental agent powered by OpenClaw AI assistant with OpenRouter LLM provider.",
 )
-async def openclaw_agent(input: Message):
+async def openclaw_agent(
+    input: Message,
+    trajectory: Annotated[TrajectoryExtensionServer, TrajectoryExtensionSpec()],
+) -> AsyncGenerator[RunYield, Message]:
     """Forwards user messages to an OpenClaw instance and returns the response."""
     user_input = input.parts[0].root.text if input.parts else ""
     if not user_input:
@@ -72,13 +76,30 @@ async def openclaw_agent(input: Message):
 
     session_id = input.context_id or input.message_id or "default"
 
-    yield AgentMessage(text="Thinking...")
+    metadata = trajectory.trajectory_metadata(
+        title="OpenClaw request",
+        content=f"Forwarding the message to the local OpenClaw gateway using conversation session `{session_id}`.",
+        group_id="openclaw-request",
+    )
+    yield metadata
 
     try:
         response = await _run_openclaw_agent(user_input, session_id=session_id)
+        metadata = trajectory.trajectory_metadata(
+            title="OpenClaw response ready",
+            content="Received a response from the local OpenClaw gateway.",
+            group_id="openclaw-request",
+        )
+        yield metadata
         yield AgentMessage(text=response)
     except Exception as e:
         logger.exception("OpenClaw agent error")
+        metadata = trajectory.trajectory_metadata(
+            title="OpenClaw request failed",
+            content=f"The OpenClaw gateway request failed: `{e}`",
+            group_id="openclaw-request",
+        )
+        yield metadata
         yield AgentMessage(text=f"Error: {e}")
 
 
