@@ -11,7 +11,7 @@ from agentstack_sdk.server import Server
 logger = logging.getLogger(__name__)
 
 server = Server()
-DEFAULT_TIMEOUT_SECONDS = float(os.getenv("OPENCLAW_AGENT_TIMEOUT", "90"))
+DEFAULT_TIMEOUT_SECONDS = float(os.getenv("OPENCLAW_AGENT_TIMEOUT", "180"))
 
 
 def _extract_text_response(result: dict[str, Any]) -> str:
@@ -41,13 +41,18 @@ async def _run_openclaw_agent(message: str, session_id: str = "default") -> str:
         await proc.communicate()
         raise RuntimeError(f"OpenClaw agent timed out after {DEFAULT_TIMEOUT_SECONDS:g}s")
 
+    stderr_text = stderr.decode().strip()
+    if stderr_text:
+        logger.warning("OpenClaw agent stderr: %s", stderr_text)
+
     if proc.returncode != 0:
-        error_msg = stderr.decode().strip()
-        raise RuntimeError(f"OpenClaw agent failed (exit {proc.returncode}): {error_msg}")
+        raise RuntimeError(f"OpenClaw agent failed (exit {proc.returncode}): {stderr_text}")
 
     raw_output = stdout.decode().strip()
     if not raw_output:
         raise RuntimeError("OpenClaw agent returned an empty response")
+
+    logger.info("OpenClaw agent raw JSON response: %s", raw_output)
 
     try:
         result = json.loads(raw_output)
@@ -97,7 +102,7 @@ async def openclaw_agent(
             group_id="openclaw-request",
         )
         yield metadata
-        yield AgentMessage(text=f"Error: {e}")
+        raise
 
 
 def run():

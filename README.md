@@ -36,7 +36,7 @@ The agent server starts on `localhost:8000`.
 | `OPENROUTER_API_KEY`     | Yes      | —                                                | OpenRouter API key               |
 | `OPENCLAW_MODEL`         | No       | `openrouter/arcee-ai/trinity-large-preview:free` | LLM model to use                 |
 | `OPENCLAW_VERSION`       | No       | `latest`                                         | OpenClaw CLI version             |
-| `OPENCLAW_AGENT_TIMEOUT` | No       | `90`                                             | Agent response timeout (seconds) |
+| `OPENCLAW_AGENT_TIMEOUT` | No       | `180`                                            | Agent response timeout (seconds) |
 | `HOST`                   | No       | `0.0.0.0`                                        | Agent server bind address        |
 | `PORT`                   | No       | `8000`                                           | Agent server port                |
 
