@@ -46,10 +46,21 @@ async def _stream_openclaw_agent(message: str, session_id: str = "default") -> A
     }
 
     timeout = httpx.Timeout(timeout=timeout_seconds, connect=min(timeout_seconds, 10.0))
+    logger.info(
+        "OpenClaw stream start session=%s url=%s timeout=%ss",
+        session_id,
+        url,
+        timeout_seconds,
+    )
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as response:
+                logger.info(
+                    "OpenClaw stream connected session=%s status=%s",
+                    session_id,
+                    response.status_code,
+                )
                 if response.status_code != 200:
                     body = await response.aread()
                     error_text = body.decode().strip()
@@ -60,10 +71,17 @@ async def _stream_openclaw_agent(message: str, session_id: str = "default") -> A
                             pass
                         else:
                             error_text = _extract_error_message(error_payload)
+                    logger.error(
+                        "OpenClaw stream HTTP error session=%s status=%s error=%s",
+                        session_id,
+                        response.status_code,
+                        error_text,
+                    )
                     raise RuntimeError(f"OpenClaw gateway request failed ({response.status_code}): {error_text}")
 
                 event_type: str | None = None
                 data_lines: list[str] = []
+                saw_any_event = False
 
                 async for line in response.aiter_lines():
                     if not line:
@@ -86,6 +104,10 @@ async def _stream_openclaw_agent(message: str, session_id: str = "default") -> A
                         if not isinstance(resolved_type, str) or not resolved_type:
                             raise RuntimeError(f"OpenClaw gateway returned an event without a type: {event}")
 
+                        if not saw_any_event:
+                            logger.info("OpenClaw stream first event session=%s", session_id)
+                            saw_any_event = True
+
                         event["type"] = resolved_type
                         yield event
 
@@ -102,8 +124,15 @@ async def _stream_openclaw_agent(message: str, session_id: str = "default") -> A
                         data_lines.append(line.split(":", 1)[1].lstrip())
 
                 if data_lines:
+                    logger.error("OpenClaw stream incomplete SSE frame session=%s", session_id)
                     raise RuntimeError("OpenClaw gateway stream ended with an incomplete SSE frame")
+                logger.info(
+                    "OpenClaw stream done session=%s saw_events=%s",
+                    session_id,
+                    saw_any_event,
+                )
     except httpx.TimeoutException as exc:
+        logger.error("OpenClaw stream timeout session=%s timeout=%ss", session_id, timeout_seconds)
         raise RuntimeError(f"OpenClaw agent timed out after {timeout_seconds:g}s") from exc
 
 
@@ -133,18 +162,45 @@ async def openclaw_agent(
     try:
         completed = False
         streamed_text = False
+        emitted_stream_connected = False
+        emitted_first_chunk = False
 
         async for event in _stream_openclaw_agent(user_input, session_id=session_id):
             event_type = event["type"]
 
+            if not emitted_stream_connected:
+                metadata = trajectory.trajectory_metadata(
+                    title="OpenClaw stream connected",
+                    content=f"Connected to the local OpenClaw gateway for session `{session_id}`.",
+                    group_id="openclaw-request",
+                )
+                yield metadata
+                emitted_stream_connected = True
+
             if event_type == "response.output_text.delta":
                 text = event.get("delta")
                 if isinstance(text, str) and text:
+                    if not emitted_first_chunk:
+                        metadata = trajectory.trajectory_metadata(
+                            title="OpenClaw response streaming",
+                            content="Received the first streamed response chunk from the local OpenClaw gateway.",
+                            group_id="openclaw-request",
+                        )
+                        yield metadata
+                        emitted_first_chunk = True
                     streamed_text = True
                     yield AgentMessage(text=text)
             elif event_type == "response.output_text.done" and not streamed_text:
                 text = event.get("text")
                 if isinstance(text, str) and text:
+                    if not emitted_first_chunk:
+                        metadata = trajectory.trajectory_metadata(
+                            title="OpenClaw response streaming",
+                            content="Received the first streamed response chunk from the local OpenClaw gateway.",
+                            group_id="openclaw-request",
+                        )
+                        yield metadata
+                        emitted_first_chunk = True
                     streamed_text = True
                     yield AgentMessage(text=text)
             elif event_type == "response.failed":
@@ -153,8 +209,14 @@ async def openclaw_agent(
                 completed = True
 
         if not completed:
+            logger.error("OpenClaw stream missing completion session=%s", session_id)
             raise RuntimeError("OpenClaw gateway stream ended before completion")
 
+        logger.info(
+            "OpenClaw response ready session=%s streamed_text=%s",
+            session_id,
+            streamed_text,
+        )
         metadata = trajectory.trajectory_metadata(
             title="OpenClaw response ready",
             content="Received a response from the local OpenClaw gateway.",
