@@ -8,7 +8,7 @@ services:
       - "${PORT:-8000}:8000"
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY in .env or environment}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?Set OPENCLAW_GATEWAY_TOKEN in .env or environment}
       OPENCLAW_MODEL: ${OPENCLAW_MODEL:-openrouter/arcee-ai/trinity-large-preview:free}
+      OPENCLAW_GATEWAY_PORT: ${OPENCLAW_GATEWAY_PORT:-18789}
       OPENCLAW_AGENT_TIMEOUT: ${OPENCLAW_AGENT_TIMEOUT:-180}
-      PORT: "8000"
-      HOST: "0.0.0.0"
