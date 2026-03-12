@@ -12,3 +12,9 @@ services:
       OPENCLAW_MODEL: ${OPENCLAW_MODEL:-openrouter/arcee-ai/trinity-large-preview:free}
       OPENCLAW_GATEWAY_PORT: ${OPENCLAW_GATEWAY_PORT:-18789}
       OPENCLAW_AGENT_TIMEOUT: ${OPENCLAW_AGENT_TIMEOUT:-180}
+    volumes:
+      - openclaw-data:/root/.openclaw
+
+volumes:
+  openclaw-data:
+    name: agentstack-openclaw-data
